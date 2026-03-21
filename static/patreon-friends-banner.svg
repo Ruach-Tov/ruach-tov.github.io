@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 200" width="460" height="200">
+  <defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="460" height="200" fill="#0d0d1a" rx="8"/>
+
+  <!-- Subtle border -->
+  <rect width="458" height="198" x="1" y="1" fill="none" stroke="#2845b0" stroke-width="1.5" rx="7" opacity="0.6"/>
+
+  <!-- Logo seal (scaled down, positioned left) -->
+  <g transform="translate(80, 100) scale(0.42)">
+    <!-- Background circle -->
+    <circle cx="0" cy="0" r="98" fill="#0d0d1a"/>
+    <!-- Text band fill -->
+    <circle cx="0" cy="0" r="95" fill="#0a0a2e"/>
+    <!-- Outer stroke -->
+    <circle cx="0" cy="0" r="95" fill="none" stroke="#2845b0" stroke-width="2"/>
+    <!-- Inner fill + stroke -->
+    <circle cx="0" cy="0" r="73" fill="#0d0d1a" stroke="#2845b0" stroke-width="1.8"/>
+    <!-- Center RT -->
+    <text x="0" y="14" font-family="'Times New Roman', 'David', serif" font-size="52" font-weight="bold" fill="#e8e4ff" text-anchor="middle" filter="url(#glow)" letter-spacing="4">ר״ט</text>
+    <!-- Light rays right -->
+    <line x1="50" y1="0" x2="100" y2="0" stroke="white" stroke-width="2.2" opacity="0.85"/>
+    <line x1="50" y1="0" x2="100" y2="-6" stroke="white" stroke-width="1.6" opacity="0.55"/>
+    <line x1="50" y1="0" x2="100" y2="6" stroke="white" stroke-width="1.6" opacity="0.55"/>
+    <line x1="50" y1="0" x2="98" y2="-13" stroke="white" stroke-width="1.1" opacity="0.35"/>
+    <line x1="50" y1="0" x2="98" y2="13" stroke="white" stroke-width="1.1" opacity="0.35"/>
+    <line x1="50" y1="0" x2="95" y2="-20" stroke="white" stroke-width="0.7" opacity="0.2"/>
+    <line x1="50" y1="0" x2="95" y2="20" stroke="white" stroke-width="0.7" opacity="0.2"/>
+    <!-- Light rays left -->
+    <line x1="-50" y1="0" x2="-100" y2="0" stroke="white" stroke-width="2.2" opacity="0.85"/>
+    <line x1="-50" y1="0" x2="-100" y2="-6" stroke="white" stroke-width="1.6" opacity="0.55"/>
+    <line x1="-50" y1="0" x2="-100" y2="6" stroke="white" stroke-width="1.6" opacity="0.55"/>
+    <line x1="-50" y1="0" x2="-98" y2="-13" stroke="white" stroke-width="1.1" opacity="0.35"/>
+    <line x1="-50" y1="0" x2="-98" y2="13" stroke="white" stroke-width="1.1" opacity="0.35"/>
+    <line x1="-50" y1="0" x2="-95" y2="-20" stroke="white" stroke-width="0.7" opacity="0.2"/>
+    <line x1="-50" y1="0" x2="-95" y2="20" stroke="white" stroke-width="0.7" opacity="0.2"/>
+  </g>
+
+  <!-- Title text -->
+  <text x="200" y="72" font-family="'Times New Roman', serif" font-size="26" fill="white" font-weight="bold" letter-spacing="1.5">Friends of</text>
+  <text x="200" y="108" font-family="'Times New Roman', serif" font-size="30" fill="#e8e4ff" font-weight="bold" letter-spacing="2" filter="url(#glow)">Ruach Tov</text>
+
+  <!-- Subtle tagline -->
+  <text x="200" y="145" font-family="'Times New Roman', serif" font-size="13" fill="#8888cc" letter-spacing="1" opacity="0.8">רוח טוב — Good Spirit</text>
+
+  <!-- Decorative horizontal ray extending from seal to right edge -->
+  <line x1="122" y1="100" x2="455" y2="100" stroke="white" stroke-width="0.5" opacity="0.12"/>
+  <line x1="122" y1="100" x2="350" y2="100" stroke="white" stroke-width="0.8" opacity="0.08"/>
+</svg>

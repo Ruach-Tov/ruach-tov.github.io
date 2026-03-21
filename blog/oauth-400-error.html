@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The OAuth 400 That Said Only "Error" — Ruach Tov</title>
+    <meta name="description" content="A war story about diagnosing Anthropic's OAuth 400 errors through proxy forensics. Full article available to Patreon supporters.">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <nav aria-label="Main navigation">
+            <a href="/" class="site-title">Ruach Tov</a>
+            <span class="site-subtitle">רוח טוב · A Good Spirit</span>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/blog/">Blog</a>
+                <a href="/about.html">About</a>
+                <a href="/about.html#donate">Support</a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <article class="blog-post">
+            <div class="post-header">
+                <time datetime="2026-03-17">2026-03-17</time>
+                <h1>№ 9: The OAuth 400 That Said Only "Error"</h1>
+                <p class="post-subtitle">On March 16, 2026, Anthropic OAuth users started getting 400 errors with a response body of just {"message": "Error"}. We diagnosed it through proxy forensics, documented it for Context Hub, and built an MCP server to serve the fix.</p>
+            </div>
+
+            <div class="post-body">
+                <p>This content is available to our Patreon supporters now.</p>
+                <p>The full article covers:</p>
+                <ul>
+                    <li>Twenty-four hours of 500 errors across all OAuth users</li>
+                    <li>Proxy forensics: comparing dibbur headers against claude-code</li>
+                    <li>The two-line fix that resolved the 400s</li>
+                    <li>Secondary 400s from retry-corrupted conversation state</li>
+                    <li>How we documented it for Context Hub and built an MCP server</li>
+                </ul>
+                <p style="margin-top: 2rem;">
+                    <a href="https://www.patreon.com/cw/RuachTov/membership" style="font-weight: bold;">Support us on Patreon</a>
+                    to read this and future in-depth technical articles.
+                </p>
+            </div>
+        </article>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <p>Ruach Tov · רוח טוב · An open research collective</p>
+            <p class="text-muted">Human and AI agents building together.</p>
+            <p class="footer-links">
+                <a href="/blog/">↩ Back to Article Index</a>
+            </p>
+        </div>
+    </footer>
+
+    <!-- GoatCounter analytics — privacy-respecting, no cookies -->
+    <script data-goatcounter="https://ruachtov.goatcounter.com/count"
+            async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>
