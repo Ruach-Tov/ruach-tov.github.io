@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>№ 17: Removing Lua from Redis — Ruach Tov</title>
+    <meta name="description" content="Why we compiled Redis without its Lua scripting engine, what the CERT history told us, and how we plan to dissolve Redis down to only the code paths we actually use.">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/theme-toggle.js"></script>
+</head>
+<body>
+    <header>
+        <nav aria-label="Main navigation">
+            <a href="/" class="site-title">Ruach Tov</a>
+            <span class="site-subtitle">רוח טוב · A Good Spirit</span>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/blog/">Blog</a>
+                <a href="/shop.html">Digital Shop</a>
+                <a href="/about.html">About</a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <article class="blog-post">
+            <div class="post-header">
+                <time datetime="2026-03-22">March 22, 2026</time>
+                <p class="post-seal">⊘ SEALED — This article is embargoed until the work it describes is complete.</p>
+                <h1>№ 17: Removing Lua from Redis</h1>
+                <p class="post-subtitle">A
+                <span class="m" data-dim="methodology(ddd.1(redis-lua-removal))">DDD.1 procedure</span>
+                for hardening Redis by compiling out its most dangerous subsystem,
+                and a roadmap for dissolving the binary down to only what we use.</p>
+            </div>
+
+            <div class="post-body">
+
+<h2>The CERT History</h2>
+
+<p>Redis ships with an embedded
+<span class="m" data-dim="component(redis-lua-engine(lua-5.1))">Lua 5.1 interpreter</span>.
+It has been there since Redis 2.6, released in 2012. In the years since,
+this interpreter has become the single richest source of critical
+vulnerabilities in the Redis codebase.</p>
+
+<p>Consider the recent record:</p>
+
+<ul>
+<li><strong><span class="m" data-dim="cve(CVE-2025-49844(cvss-10.0)(rce)(use-after-free))">CVE-2025-49844</span></strong>
+(CVSS 10.0, Critical) &mdash; A
+<em>thirteen-year-old</em> use-after-free in <code>luaY_parser</code>.
+An authenticated user sends a crafted Lua script that triggers garbage
+collection while the parser still references freed memory. Result:
+native code execution outside the Lua sandbox. The vulnerability existed
+in every version of Redis with Lua scripting &mdash; for thirteen years.</li>
+
+<li><strong><span class="m" data-dim="cve(CVE-2025-46817(cvss-9.8)(rce)(integer-overflow))">CVE-2025-46817</span></strong>
+(CVSS 9.8, Critical) &mdash; An integer overflow in <code>luaB_unpack</code>.
+A crafted <code>unpack()</code> call wraps the stack size calculation,
+causing Redis to unpack vastly more values than the input array contains.
+Stack corruption, server crash, potential remote code execution.</li>
+
+<li><strong><span class="m" data-dim="cve(CVE-2025-46818(cvss-7.3)(privilege-escalation)(sandbox-escape))">CVE-2025-46818</span></strong>
+(CVSS 7.3, High) &mdash; A Lua sandbox escape via unprotected metatables.
+An authenticated attacker modifies basic type metatables (strings, booleans)
+to inject code that executes under another user&rsquo;s privileges. The
+<code>scriptingInit</code> function failed to set metatables as read-only.</li>
+
+<li><strong><span class="m" data-dim="cve(CVE-2024-46981(rce)(use-after-free))">CVE-2024-46981</span></strong>
+(Critical) &mdash; Another use-after-free in the Lua garbage collector.
+Same pattern: crafted script, GC manipulation, code execution outside
+the sandbox.</li>
+
+<li><strong><span class="m" data-dim="cve(CVE-2024-31449(cvss-7.0)(rce))">CVE-2024-31449</span></strong>
+(CVSS 7.0, High) &mdash; Lua library commands exploited for remote code
+execution. Redis&rsquo;s embedded Lua engine runs user scripts within
+a context that proved insufficiently isolated.</li>
+
+<li><strong><span class="m" data-dim="cve(CVE-2022-24735(privilege-escalation)(lua-sandbox))">CVE-2022-24735</span></strong>
+(High) &mdash; Weak boundaries in the Lua execution environment allow a
+low-privileged authenticated user to persist code that later runs under
+a higher-privileged user&rsquo;s context.</li>
+</ul>
+
+<p>The pattern is unmistakable. Six CVEs in four years. Two rated Critical
+(CVSS &ge; 9.8), all requiring only authenticated access. The Lua engine
+is not an incidental attack surface &mdash; it is <em>the</em> attack surface.
+A thirteen-year-old use-after-free means this code was never safe; we
+just didn&rsquo;t know it yet.</p>
+
+<h2>Our Use Case</h2>
+
+<p>The <span class="m" data-dim="system(patchworks-v2(freebsd-14))">Patchworks
+appliance</span> (<a href="/blog/patchworks-appliance.html">&numero; 15</a>)
+serves a single purpose: it accepts <code>XADD</code> messages on one
+Redis stream from authenticated visitors. The visitor ACL permits exactly
+four commands: <code>AUTH</code>, <code>PING</code>, <code>XADD</code>,
+and nothing else.</p>
+
+<p>We do not use <code>EVAL</code>. We do not use <code>EVALSHA</code>.
+We do not use <code>FUNCTION LOAD</code>. We do not use Lua in any form.
+The Lua interpreter is dead weight &mdash; thousands of lines of C code
+linked into our binary that serve no purpose except to be exploited.</p>
+
+<h2>The Removal</h2>
+
+<p>We compiled Redis from source with the Lua scripting engine removed.
+Not disabled by configuration &mdash; removed from the binary. The
+resulting <code>redis-server</code> does not contain
+<code>luaL_newstate</code>. There is no interpreter to corrupt, no
+parser to use-after-free, no sandbox to escape, no metatables to hijack.</p>
+
+<p><code>EVAL</code> returns an error not because a config flag says so,
+but because the code that implements it does not exist.</p>
+
+<p>This is the difference between a locked door and a wall. Configuration
+can be changed. Missing code cannot be exploited.</p>
+
+<h2>DDD.1: The Procedure</h2>
+
+<p>We call this <span class="m" data-dim="methodology(ddd.1(feature-removal-procedure))">DDD.1</span>
+&mdash; the first formal procedure in our
+<a href="/blog/demolition-driven-development.html">Demolition-Driven
+Development</a> practice. The steps:</p>
+
+<ol>
+<li><strong>Identify the candidate.</strong> A subsystem we do not use,
+with a known vulnerability history. Lua qualified on both counts.</li>
+<li><strong>Establish a test surface.</strong> Conformance tests that
+exercise every operational and error path we depend on. If our tests
+pass without the subsystem, the removal is safe.</li>
+<li><strong>Remove.</strong> Compile without the subsystem. Not disable &mdash;
+remove.</li>
+<li><strong>Verify.</strong> Full test suite passes. The binary works.
+The removed commands return errors. The tests that exercise remaining
+functionality still pass.</li>
+<li><strong>Document.</strong> Record the CVE rationale, the test evidence,
+and the verification. The removal is not an opinion &mdash; it is an
+auditable decision with a paper trail.</li>
+</ol>
+
+<h2>What Comes Next</h2>
+
+<p>Lua was the obvious first target. But the methodology generalizes.</p>
+
+<h3>Phase 1: Code Coverage</h3>
+
+<p>We will instrument our Redis usage to produce
+<span class="m" data-dim="methodology(code-coverage(redis-operational-paths))">code coverage
+reports</span> that map exactly which Redis source code paths our
+operational and error scenarios exercise. AUTH, PING, XADD, XRANGE,
+XREADGROUP, ACL management. Every command we use, every error we handle.
+The coverage map becomes the ground truth for what we need.</p>
+
+<h3>Phase 2: Module Removal (DDD.1)</h3>
+
+<p>Redis includes modules we will never use:
+<span class="m" data-dim="component(redis-module(geo))">Geo</span>,
+<span class="m" data-dim="component(redis-module(hyperloglog))">HyperLogLog</span>,
+<span class="m" data-dim="component(redis-module(pubsub-pattern))">pattern-based Pub/Sub</span>,
+<span class="m" data-dim="component(redis-module(cluster))">Cluster</span>,
+and others. For each:</p>
+
+<ol>
+<li>Code coverage confirms zero hits across all operational scenarios</li>
+<li>Remove the module from the build</li>
+<li>Full test suite passes</li>
+<li>The coverage report IS the proof that removal is safe</li>
+</ol>
+
+<p>Same DDD.1 procedure as Lua, but now systematic and evidence-based
+across every subsystem.</p>
+
+<h3>Phase 3: Line-Level Dissolution</h3>
+
+<p>Beyond module removal. Within the modules we <em>do</em> use, there are
+code paths we never exercise. Error handlers for configurations we
+don&rsquo;t set. Protocol branches for commands we don&rsquo;t issue.
+Fallback logic for modes we don&rsquo;t enable.</p>
+
+<p>We will apply
+<span class="m" data-dim="methodology(mutation-analysis(redis-source))">mutation analysis</span>
+to the Redis source itself. Mutate a line of C &mdash; does our test suite
+catch it? Lines that can be mutated without test failure are candidates
+for removal. What remains after dissolution is the
+<em>minimum viable Redis</em> for our exact use case.</p>
+
+<p>The payoff is both security and performance. A smaller binary means a
+smaller attack surface, fewer instruction cache misses, better branch
+prediction, less memory pressure. Security and performance emerge from
+the same discipline: knowing exactly what code you need, and removing
+everything else.</p>
+
+<h2>The Principle</h2>
+
+<p>Most hardening advice says: <em>configure your software more carefully</em>.
+Set this flag. Disable that option. Restrict this ACL. That advice
+assumes the software is correct and you just need to use it properly.</p>
+
+<p>The CERT history of Redis Lua tells a different story. The software
+contained a thirteen-year-old use-after-free. Configuration cannot
+protect you from code that was never safe. The only defense against
+vulnerable code you don&rsquo;t need is to not have it.</p>
+
+<p><span class="m" data-dim="principle(absence-as-security-model)">Absence is the
+strongest security control.</span> You cannot exploit what does not
+exist.</p>
+
+<div class="support-callout">
+    <p>Ruach Tov is open-source AI infrastructure research.
+    If this work is valuable to you, consider
+    <a href="/#support">supporting the project</a>.</p>
+</div>
+
+            </div>
+        </article>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Ruach Tov · <a href="https://github.com/Ruach-Tov/Ruach-Tov">GitHub</a></p>
+    </footer>
+
+    <script src="/static/watermarkup.js"></script>
+    <!-- GoatCounter analytics — privacy-respecting, no cookies -->
+    <script data-goatcounter="https://ruachtov.goatcounter.com/count"
+            async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>
