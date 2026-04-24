@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>№ 18: Dissolving Redis — Ruach Tov</title>
+    <meta name="description" content="We use code coverage and demolition-driven development to remove every module we don't need from Redis, one at a time, until only the code paths we actually exercise remain. A procedural account.">
+    <meta name="robots" content="noindex, nofollow">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/theme-toggle.js"></script>
+</head>
+<body>
+    <header>
+        <nav aria-label="Main navigation">
+            <a href="/" class="site-title">Ruach Tov</a>
+            <span class="site-subtitle">רוח טוב · A Good Spirit</span>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/blog/">Blog</a>
+                <a href="/shop.html">Digital Shop</a>
+                <a href="/about.html">About</a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <article class="blog-post">
+            <div class="post-header">
+                <time datetime="2026-03-22">March 22, 2026</time>
+                <p class="post-seal">⊘ SEALED — This article grows with each module we remove. Unsealed when dissolution is complete.</p>
+                <h1>№ 18: Dissolving Redis</h1>
+                <p class="post-subtitle">We compiled Redis with
+                <span class="m" data-dim="tool(gcov(code-coverage))">code coverage
+                instrumentation</span>, ran the 59 tests that exercise everything
+                our appliance actually does, and discovered that we use
+                <strong>14.9%</strong> of Redis. This is the story of removing
+                the other 85.1%, one module at a time, and watching the binary
+                get smaller, faster, and harder to attack.</p>
+            </div>
+
+            <div class="post-body">
+
+<h2>The Baseline</h2>
+
+<p>Our <a href="/blog/patchworks-appliance.html">patchworks appliance</a>
+runs <span class="m" data-dim="component(redis-hardened(7.2.13))">Redis 7.2.13</span>
+as PID 1 on a FreeBSD machine. It accepts authenticated connections,
+lets visitors write messages to a single stream, and lets administrators
+read them. That&rsquo;s it. No sorted sets, no geospatial queries, no
+pub/sub, no scripting, no cluster coordination.</p>
+
+<p>We built Redis from source with
+<span class="m" data-dim="tool(gcov(compile-flags))"><code>-fprofile-arcs
+-ftest-coverage</code></span> and ran our 59 operational tests &mdash; every
+authentication flow, every stream command, every ACL enforcement case,
+every error path we handle in production. Then we ran <code>gcov</code>.</p>
+
+<p>The results:</p>
+
+<pre><code>Total executable lines: 57,753
+Lines executed:          8,617 (14.9%)
+Lines NOT executed:     48,551 (85.1%)
+Zero-coverage files:    36 (20,332 lines)</code></pre>
+
+<p>Eighty-five percent of the Redis source code does nothing for us. It
+sits in our binary, consuming instruction cache, expanding our attack
+surface, and adding complexity to a system whose virtue is simplicity.
+Every one of those 48,551 lines is a candidate for removal.</p>
+
+<p>But we don&rsquo;t remove code by guessing. We remove it by proving &mdash;
+with tests, with coverage, and with traces &mdash; that we know exactly what
+we&rsquo;re cutting and exactly what remains.</p>
+
+<h2>The Procedure: DDD.1</h2>
+
+<p>We call our removal methodology
+<span class="m" data-dim="methodology(ddd.1(demolition-driven-development))">DDD.1</span> &mdash;
+the first formal procedure in
+<a href="/blog/demolition-driven-development.html">Demolition-Driven
+Development</a>. It has five steps, and we cycle through them for each
+module we remove:</p>
+
+<ol>
+<li><strong>Write tests that exercise the condemned module.</strong> Not perfunctory
+tests &mdash; thorough tests. Every command, every flag, every edge case we
+can find. We aim for near-total coverage of the module&rsquo;s source code.
+These tests prove we <em>understand</em> what we&rsquo;re removing.</li>
+
+<li><strong>Verify all tests pass.</strong> Before touching any source code,
+every DDD.1 test must pass. This is the &ldquo;before&rdquo; photograph.
+The module works. We know how it works. We have evidence.</li>
+
+<li><strong>Excise the module.</strong> Replace the source files with stubs that
+return error messages. Not disabled by configuration &mdash; removed from the
+binary. The stubs ensure that any client issuing a removed command gets a
+clear, honest error: <em>this command is not available.</em></li>
+
+<li><strong>Verify all tests xfail.</strong> Every test we wrote in step 1
+must now fail &mdash; and we expect it to fail. We use
+<code>pytest.mark.xfail(strict=True)</code>, which means the test
+<em>must</em> fail. If any test unexpectedly passes, the removal is
+incomplete. Something survived that shouldn&rsquo;t have.</li>
+
+<li><strong>Trace the residual coverage.</strong> This is the step that
+makes DDD.1 more than test-driven deletion. We run each xfail test
+individually with
+<span class="m" data-dim="methodology(per-test-gcov-traces)">per-test gcov
+instrumentation</span> and measure how many lines of C each failing test
+exercises. After a clean excision, every test should exercise approximately
+the same number of lines &mdash; the
+<span class="m" data-dim="concept(infrastructure-floor)">infrastructure floor</span>,
+which is just the cost of being a Redis server: boot, connect, authenticate,
+dispatch, error, reply. If any test exercises significantly more code than
+average, something is leaking. A hidden dependency survived. The excision
+is not clean.</li>
+</ol>
+
+<p>After step 5, we also verify that our 59 operational tests still pass.
+The appliance works. The removed module is gone. The evidence is complete.</p>
+
+<p>Then we pick the next module and repeat.</p>
+
+<hr>
+
+<h2>Module 1: Geo</h2>
+
+<p><em>Three files. 1,584 lines. Ten commands. Zero coverage.</em></p>
+
+<h3>Step 1: Writing the Tests</h3>
+
+<p>Redis&rsquo;s Geo module provides geospatial indexing: you store
+longitude/latitude pairs, then query by radius, bounding box, or
+distance. It&rsquo;s built on sorted sets with geohash-encoded scores,
+and it ships with its own geohash library (two additional C files).</p>
+
+<p>We don&rsquo;t use any of it. Our appliance handles streams. But before
+we could remove Geo, we had to prove we understood what it did.</p>
+
+<p>We wrote 43 tests across seven test classes:</p>
+
+<ul>
+<li><strong>GEOADD</strong> (7 tests) &mdash; single member, multiple members,
+update existing, NX flag (don&rsquo;t overwrite), XX flag (only overwrite),
+CH flag (count changes), boundary coordinates (&plusmn;180&deg;
+longitude, &plusmn;85&deg; latitude)</li>
+
+<li><strong>GEOPOS</strong> (4 tests) &mdash; single lookup, multiple lookup,
+nonexistent member returns nil, nonexistent key returns nil</li>
+
+<li><strong>GEODIST</strong> (6 tests) &mdash; meters, kilometers, miles, feet,
+same point returns zero, nonexistent member returns nil</li>
+
+<li><strong>GEOHASH</strong> (4 tests) &mdash; single hash, multiple hashes,
+nonexistent returns nil, nearby points share geohash prefix</li>
+
+<li><strong>GEOSEARCH</strong> (9 tests) &mdash; radius from member, radius from
+coordinates, bounding box, COUNT limit, ASC sort, DESC sort, WITHDIST,
+WITHCOORD, empty result</li>
+
+<li><strong>GEOSEARCHSTORE / GEORADIUS</strong> (6 tests) &mdash; store results,
+store distances, legacy GEORADIUS and GEORADIUSBYMEMBER commands</li>
+
+<li><strong>Edge cases</strong> (7 tests) &mdash; invalid longitude, invalid
+latitude, nonexistent keys, nonexistent members, verify underlying sorted
+set, delete via ZREM</li>
+</ul>
+
+<p>We used real-world coordinates &mdash; Rome, Paris, London, Berlin,
+Tokyo, Tel Aviv &mdash; so the distance assertions were readable: Rome to
+Paris is roughly 1,105 km, and the test asserts a value between 1,000
+and 1,200.</p>
+
+<h3>Step 2: All Tests Pass</h3>
+
+<pre><code>$ pytest tests/test_ddd1_geo.py -v
+...
+43 passed in 0.92s</code></pre>
+
+<p>Coverage of the geo source files after running these tests: 88.6%.
+The uncovered 11.4% was error-handling for encoding edge cases
+(skiplist vs. listpack internal representations) and argument validation
+paths that required malformed RESP protocol input rather than normal
+client calls. We were satisfied that we understood the module.</p>
+
+<h3>Step 3: Excision</h3>
+
+<p>We replaced <code>geo.c</code> (1,005 lines), <code>geohash.c</code>
+(299 lines), and <code>geohash_helper.c</code> (280 lines) with a single
+67-line stub file. Each of the ten command handlers now calls:</p>
+
+<pre><code>addReplyError(c,
+    "ERR Geo commands are not available. "
+    "This redis-server was compiled without "
+    "geospatial support (redis-hardened).");</code></pre>
+
+<p>The geohash library files became empty &mdash; four lines each
+(a comment pointing to the rationale in <code>geo.c</code>).
+Rebuild: clean. No warnings.</p>
+
+<h3>Step 4: All Tests Xfail</h3>
+
+<p>We flipped one boolean:</p>
+
+<pre><code>GEO_EXCISED = True</code></pre>
+
+<p>Every test in the file is decorated with
+<code>@geo_test</code>, a marker that resolves to
+<code>pytest.mark.xfail(strict=True)</code> when the flag is set.
+Strict means: the test <em>must</em> fail. If Geo somehow still worked,
+the test would pass, and <code>strict=True</code> would report that
+unexpected pass as a failure. A passing test after excision means the
+removal is incomplete.</p>
+
+<pre><code>$ pytest tests/test_ddd1_geo.py -v
+...
+43 xfailed in 7.25s</code></pre>
+
+<p>All 43 tests failed as expected. The operational tests:</p>
+
+<pre><code>$ pytest tests/test_patchworks_coverage.py -v
+...
+59 passed in 0.97s</code></pre>
+
+<p>The appliance is unaffected.</p>
+
+<h3>Step 5: Trace Analysis</h3>
+
+<p>This is where it gets interesting.</p>
+
+<p>We ran each of the 43 xfail tests in isolation, with a fresh
+redis-server for each test, collecting gcov data per run. The question:
+after excision, how much code does each failing test exercise? A geo
+command now hits a two-line stub. But the server still has to boot, accept
+the connection, authenticate, look up the command in the dispatch table,
+call the stub, format the error, and send the reply. How deep does
+that go?</p>
+
+<pre><code>  Tests:   43
+  Average: 4,897 lines hit per test
+  Min:     4,895 lines
+  Max:     4,903 lines
+  Range:   8 lines
+  Stdev:   1 line</code></pre>
+
+<p>Every test exercised the same code. Within one line of each other.
+The range across all 43 tests was <em>eight lines</em>.</p>
+
+<p>The ~4,897 lines break down as pure infrastructure:</p>
+
+<table>
+<thead><tr><th>File</th><th>Lines hit</th><th>Role</th></tr></thead>
+<tbody>
+<tr><td><code>server.c</code></td><td>1,271</td><td>Startup and command dispatch</td></tr>
+<tr><td><code>networking.c</code></td><td>508</td><td>Connection handling</td></tr>
+<tr><td><code>module.c</code></td><td>408</td><td>Module infrastructure (even empty)</td></tr>
+<tr><td><code>rax.c</code></td><td>285</td><td>Radix tree (command table lookup)</td></tr>
+<tr><td><code>sds.c</code></td><td>262</td><td>String handling</td></tr>
+<tr><td><code>acl.c</code></td><td>208</td><td>Authentication</td></tr>
+<tr><td><code>dict.c</code></td><td>208</td><td>Hash tables</td></tr>
+<tr><td><code>config.c</code></td><td>189</td><td>Config parsing at startup</td></tr>
+</tbody>
+</table>
+
+<p>The four tests that hit 4,901&ndash;4,903 lines (instead of the
+baseline 4,895&ndash;4,897) were the &ldquo;nonexistent key&rdquo; tests.
+They triggered a database key lookup that missed, adding a few lines in
+<code>server.c</code>&rsquo;s key-miss path. Fully explained.
+Fully accounted for.</p>
+
+<p>No geo-specific code appeared in any trace. The stub is a wall.
+Nothing leaked through.</p>
+
+<p>This is what a clean excision looks like: uniform traces, vestigial
+infrastructure, no surprises. We call the ~4,897-line baseline the
+<em>infrastructure floor</em> &mdash; the irreducible cost of being a Redis
+server. As we remove more modules, this floor should shrink: fewer
+command table entries, less initialization code, smaller dispatch paths.
+Watching the floor decrease is how we measure dissolution progress.</p>
+
+<p><strong>Result:</strong> 1,584 lines removed. Binary size decreased.
+Attack surface reduced by ten command handlers and an entire geohash
+library. 43 xfail tests document exactly what was removed and prove it&rsquo;s
+gone. 59 operational tests prove the appliance still works.</p>
+
+<p>On to the next module.</p>
+
+<hr>
+
+<h2>Module 2: Bitops</h2>
+
+<p><em>One file. 1,267 lines. Seven commands. Zero coverage.</em></p>
+
+<p>Redis&rsquo;s bit operation module provides SETBIT, GETBIT, BITCOUNT,
+BITOP (AND/OR/XOR/NOT), BITPOS, BITFIELD, and BITFIELD_RO. It&rsquo;s
+a compact, self-contained module for treating Redis strings as bit
+arrays.</p>
+
+<p>We wrote 30 tests: individual bit manipulation (set, get, extend,
+patterns), population counting (full string, byte range, after setbit),
+bitwise operations (AND, OR, XOR, NOT, multiple keys, different lengths),
+first-bit searching (first set, first clear, range, not-found), and the
+BITFIELD sub-language (SET/GET, INCRBY, overflow modes WRAP/SAT/FAIL,
+signed integers, multiple operations, 16-bit types, read-only variant).
+All 30 passed.</p>
+
+<p>Excision: replaced 1,267 lines with seven one-line stubs.
+All 30 tests xfail. All 59 operational tests pass.</p>
+
+<p>Bitops was clean &mdash; no internal dependencies, no cross-references
+from other modules. A textbook DDD.1 cycle.</p>
+
+<h2>Module 3: Sort</h2>
+
+<p><em>One file. 316 lines. Two commands. Zero coverage.</em></p>
+
+<p>SORT is one of Redis&rsquo;s oldest commands. It sorts lists and sets
+by numeric value, lexicographically with ALPHA, with external key
+patterns via BY and GET, with LIMIT for pagination, and with STORE for
+persisting results. SORT_RO is the read-only variant.</p>
+
+<p>We wrote 10 tests covering numeric, descending, alphabetical, limit,
+store, BY pattern, GET pattern, empty list, set input, and SORT_RO.
+All 10 passed.</p>
+
+<p>Excision: replaced 316 lines with two one-line stubs.
+All 10 tests xfail. All 59 operational tests pass.</p>
+
+<h2>Module 4: LOLWUT</h2>
+
+<p><em>Three files. 566 lines. One command. Zero coverage.</em></p>
+
+<p>LOLWUT is Redis&rsquo;s easter egg &mdash; an ASCII art generator that
+ships with every Redis version. Version 5 draws a Schotter-like pattern;
+version 6 draws a different design. It includes a small canvas rendering
+library (<code>lwCanvas</code>) for drawing pixels and converting them
+to Unicode braille characters.</p>
+
+<p>It&rsquo;s charming. It&rsquo;s also 566 lines of code in a
+security-critical binary that we never call.</p>
+
+<p>We wrote 5 tests: basic output (multi-line art), version 5 rendering,
+version 6 rendering, rendering with size arguments, and art content
+verification. All 5 passed. We verified the tests checked for actual
+art content (canvas output with many lines), not just the version string
+that our stub also returns.</p>
+
+<p>Excision: replaced the three art files with stubs. The canvas API
+stubs (<code>lwCreateCanvas</code>, etc.) are retained because
+<code>lolwut.h</code> is included by <code>server.h</code>. The
+LOLWUT command now returns a single line with the Redis version.
+All 5 tests xfail. All 59 operational tests pass.</p>
+
+<h2>Module 5: Sentinel</h2>
+
+<p><em>One file. 5,484 lines. The largest single excision.</em></p>
+
+<p>Sentinel is Redis&rsquo;s distributed monitoring and automatic failover
+system. It watches master and replica instances, detects failures via
+subjective and objective down detection (+sdown, +odown), orchestrates
+failover elections, reconfigures replicas, and executes notification
+scripts. It&rsquo;s 5,484 lines of distributed systems code &mdash; the
+largest module in Redis after <code>server.c</code> itself.</p>
+
+<p>Our appliance is a single Redis instance with no replicas. Sentinel
+is not just unused &mdash; it&rsquo;s architecturally irrelevant.</p>
+
+<p>Sentinel posed a unique DDD.1 challenge. Unlike Geo or Bitops, whose
+commands route directly to handler functions, SENTINEL commands are
+rejected by the server&rsquo;s <code>CMD_ONLY_SENTINEL</code> flag
+<em>before</em> reaching any handler. This means the observable command
+behavior is identical in both original and excised builds &mdash; both
+return the same system-level error.</p>
+
+<p>So we tested structurally rather than behaviorally. Our 6 tests verify
+that sentinel-specific strings are present in the binary: failover state
+machine strings (<code>+failover-state</code>), down-detection events
+(<code>+sdown</code>, <code>+odown</code>), TILT mode references,
+configuration keywords (<code>down-after-milliseconds</code>), and
+failover reconfiguration strings. After excision, these strings vanish
+from the binary, and the tests fail.</p>
+
+<p>The stub required careful attention to lifecycle hooks:
+<code>sentinelTimer()</code> (called every server tick),
+<code>initSentinel()</code> (called at startup when
+<code>--sentinel</code> flag is set), and configuration parsing
+functions. All are no-ops since our server never enters sentinel mode.</p>
+
+<p>Excision: 5,484 lines replaced with a 70-line stub.
+All 6 tests xfail. All 59 operational tests pass.
+Binary size dropped from ~13.8 MB to ~12.3 MB.</p>
+
+<h2>Module 6: String Type Commands</h2>
+
+<p><em>One file. 951 lines. Twenty-four commands. Zero coverage.</em></p>
+
+<p>SET and GET are the most fundamental Redis commands. Removing them
+from a Redis server feels like removing wheels from a car. But our
+appliance doesn&rsquo;t use string keys &mdash; it uses streams. The live
+patchworks instance has exactly one key: <code>ruach:stream:contact</code>.
+No strings.</p>
+
+<p>We wrote 30 tests: SET with EX/PX/NX/XX/GET/KEEPTTL flags, SETNX,
+SETEX, PSETEX, GETEX (persist, set expiry), GETDEL, GETSET, MGET, MSET,
+MSETNX, INCR/DECR/INCRBY/DECRBY/INCRBYFLOAT, APPEND, STRLEN, SETRANGE,
+GETRANGE, and LCS. All 30 passed.</p>
+
+<p>String type was the first data type excision where we discovered a
+clean separation: the command handlers in <code>t_string.c</code> had
+zero references from other files. No aof.c, no rdb.c, no debug.c,
+no module.c dependencies. The internal string representation
+(<code>sds.c</code>) is a different thing entirely &mdash; that&rsquo;s
+Redis&rsquo;s core string library, used by everything. The
+<em>type commands</em> were cleanly isolable.</p>
+
+<p>Excision: 951 lines replaced with stubs. All 30 tests xfail.
+All 59 operational tests pass.</p>
+
+<h2>Module 7: Cluster</h2>
+
+<p><em>One file. 3,649 lines. The most entangled excision.</em></p>
+
+<p>Cluster was different from every previous module. Where Geo had zero
+cross-references and String had clean command handlers, Cluster&rsquo;s
+tentacles reached into every corner of the server:</p>
+
+<ul>
+<li><strong>server.c</strong> &mdash; <code>clusterCron()</code> called
+every server tick, <code>clusterInit()</code> at startup,
+<code>getNodeByQuery()</code> in command dispatch</li>
+<li><strong>db.c</strong> &mdash; six <code>slotToKey*</code> functions for
+tracking which keys live in which hash slots</li>
+<li><strong>networking.c</strong> &mdash;
+<code>getClusterConnectionsCount()</code> for connection limits</li>
+<li><strong>config.c</strong> &mdash; five
+<code>clusterUpdateMyself*</code> functions for config changes</li>
+<li><strong>debug.c, module.c, pubsub.c</strong> &mdash; node lookup,
+cluster link management, message propagation</li>
+<li><strong>Command table</strong> &mdash; MIGRATE, DUMP, RESTORE, ASKING,
+READONLY, READWRITE in addition to the CLUSTER command itself</li>
+</ul>
+
+<p>We stubbed every one of these as a no-op or trivial return. The
+lifecycle hooks do nothing (cluster is never enabled).
+<code>getClusterConnectionsCount()</code> returns 0.
+<code>slotToKey*</code> functions are empty.
+<code>genClusterInfoString()</code> returns static disabled-cluster info.
+<code>askingCommand</code> was retained as a stub because
+<code>networking.c</code> compares against it as a function pointer.</p>
+
+<p>After excision, we took an additional step: we removed 29 cluster
+command JSON files, 22 sentinel JSONs, and the JSON files for every
+other excised module &mdash; 87 files total &mdash; from the
+<code>commands/</code> directory. This eliminated their entries from the
+auto-generated command table, shrinking it from 75,816 bytes to 57,408
+bytes. The excised commands don&rsquo;t return error messages anymore
+&mdash; Redis doesn&rsquo;t recognize them at all. An attacker
+can&rsquo;t even probe for their existence.</p>
+
+<p>With the command table entries gone, the handler stubs became orphaned
+code &mdash; nothing referenced them. We deleted them too. The chain:
+command JSON &rarr; table entry &rarr; handler stub. Cut the first link and
+the rest falls away.</p>
+
+<p>Excision: 3,649 lines of cluster code + 87 command JSON files +
+orphaned stubs. All 8 tests xfail. All 59 operational tests pass.
+Binary dropped from ~12.3 MB to ~11.7 MB.</p>
+
+<h2>Interlude: Clearing the Noise</h2>
+
+<p>Before continuing to harder targets, we cleaned up sources of
+statistical noise in our coverage measurements:</p>
+
+<ul>
+<li><strong>CLI tools removed from build.</strong>
+<code>redis-cli</code> (5,933 lines), <code>redis-benchmark</code>
+(1,221 lines), and their shared library <code>cli_common.c</code> (137
+lines) were never part of the server binary, but their source files
+inflated our line-count denominator. We removed them from the Makefile
+<code>all:</code> target and <code>ALL_SOURCES</code>.</li>
+<li><strong>pqsort.c emptied</strong> (69 lines). Its only caller was
+the SORT command, already excised.</li>
+<li><strong>crc16.c stubbed</strong> (6 lines). Its only caller was
+redis-cli, no longer built.</li>
+</ul>
+
+<p>These changes removed ~7,400 lines from the measurement denominator.
+Our operational coverage jumped from 17.5% to <strong>22.3%</strong>
+&mdash; same code exercised, less dead weight counted.</p>
+
+<h2>Module 8: <em>(next &mdash; surgical excision of debug.c)</em></h2>
+
+<p><em>The remaining zero-coverage modules (data types, debug, AOF,
+pub/sub, replication, tracking, defrag, latency) are entangled with
+four infrastructure files: aof.c, rdb.c, debug.c, and module.c.
+These files contain serialization and diagnostic code for every data
+type. Removing a data type&rsquo;s internal functions breaks the linker
+because these four files still reference them.</em></p>
+
+<p><em>The next phase attacks this entanglement directly, starting with
+debug.c &mdash; the lowest-coverage infrastructure file that we have the
+least operational need for.</em></p>
+
+<hr>
+
+<h2>The Scoreboard</h2>
+
+<p>We track dissolution progress across modules:</p>
+
+<table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Lines removed</th>
+<th>DDD.1 tests</th>
+<th>Xfail</th>
+<th>Floor &Delta;</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lua scripting</td>
+<td>~900</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>✅ Excised (pre-DDD.1)</td>
+</tr>
+<tr>
+<td>HyperLogLog</td>
+<td>~15 (stubbed)</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>✅ Stubbed (pre-DDD.1)</td>
+</tr>
+<tr>
+<td><strong>Geo</strong></td>
+<td><strong>1,584</strong></td>
+<td><strong>43</strong></td>
+<td><strong>43/43</strong></td>
+<td><strong>baseline: 4,897</strong></td>
+<td><strong>✅ Excised</strong></td>
+</tr>
+<tr>
+<td><strong>Bitops</strong></td>
+<td><strong>1,267</strong></td>
+<td><strong>30</strong></td>
+<td><strong>30/30</strong></td>
+<td>&mdash;</td>
+<td><strong>✅ Excised</strong></td>
+</tr>
+<tr>
+<td><strong>Sort</strong></td>
+<td><strong>316</strong></td>
+<td><strong>10</strong></td>
+<td><strong>10/10</strong></td>
+<td>&mdash;</td>
+<td><strong>✅ Excised</strong></td>
+</tr>
+<tr>
+<td><strong>LOLWUT</strong></td>
+<td><strong>566</strong></td>
+<td><strong>5</strong></td>
+<td><strong>5/5</strong></td>
+<td>&mdash;</td>
+<td><strong>✅ Excised</strong></td>
+</tr>
+<tr>
+<td><strong>Sentinel</strong></td>
+<td><strong>5,484</strong></td>
+<td><strong>6</strong></td>
+<td><strong>6/6</strong></td>
+<td>12.3 MB (&darr;1.5 MB)</td>
+<td><strong>✅ Excised</strong></td>
+</tr>
+<tr>
+<td><strong>String type</strong></td>
+<td><strong>951</strong></td>
+<td><strong>30</strong></td>
+<td><strong>30/30</strong></td>
+<td>&mdash;</td>
+<td><strong>✅ Excised</strong></td>
+</tr>
+<tr>
+<td><strong>Cluster</strong></td>
+<td><strong>3,649</strong></td>
+<td><strong>8</strong></td>
+<td><strong>8/8</strong></td>
+<td>11.7 MB (&darr;0.6 MB)</td>
+<td><strong>✅ Excised</strong></td>
+</tr>
+<tr>
+<td><strong>Command table</strong></td>
+<td>87 JSON files</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>18 KB table shrink</td>
+<td><strong>✅ Removed</strong></td>
+</tr>
+<tr>
+<td><strong>CLI tools</strong></td>
+<td>7,366 (from build)</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td><strong>✅ Removed from build</strong></td>
+</tr>
+<tr>
+<td><strong>pqsort + crc16</strong></td>
+<td>75</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>22.3% coverage</td>
+<td><strong>✅ Emptied</strong></td>
+</tr>
+<tr>
+<td>Hash type</td>
+<td>646</td>
+<td>16 (written)</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>⏳ Entangled</td>
+</tr>
+<tr>
+<td>List type</td>
+<td>721</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>⏳ Entangled</td>
+</tr>
+<tr>
+<td>Set type</td>
+<td>904</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>⏳ Entangled</td>
+</tr>
+<tr>
+<td>Sorted set type</td>
+<td>2,297</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>⏳ Entangled</td>
+</tr>
+<tr>
+<td>debug.c</td>
+<td>976</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>&mdash;</td>
+<td>⏳ Next target</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Running total:</strong> 42,031 executable lines remain (down from
+57,753). Coverage: 22.3% (up from 14.9%). Binary: 11.6 MB (down from
+13.8 MB). 132 DDD.1 xfail tests document every removal.</p>
+
+<p>The remaining zero-coverage targets &mdash; data type internals (hash,
+list, set, sorted set) and low-coverage infrastructure (debug, AOF,
+pub/sub, replication, tracking, defrag, latency) &mdash; are entangled
+with four files that reference every type&rsquo;s internal functions.
+The next phase attacks this entanglement surgically.</p>
+
+<div class="support-callout">
+    <p>Ruach Tov is open-source AI infrastructure research.
+    If this work is valuable to you, consider
+    <a href="/#support">supporting the project</a>.</p>
+</div>
+
+            </div>
+        </article>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 Ruach Tov · <a href="https://github.com/Ruach-Tov/Ruach-Tov">GitHub</a></p>
+    </footer>
+
+    <script src="/static/watermarkup.js"></script>
+    <!-- GoatCounter analytics — privacy-respecting, no cookies -->
+    <script data-goatcounter="https://ruachtov.goatcounter.com/count"
+            async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

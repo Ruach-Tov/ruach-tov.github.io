@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Inside mcp-gateway: 96 Capabilities, One Finnish Developer, and Claude — Ruach Tov</title>
+    <meta name="description" content="A deep dive into mcp-gateway — an 18MB Rust binary with 96 built-in capabilities, built by Mikko Parkkola and Claude Opus 4.6 in a month-long sprint. We built it from source and explored what's inside.">
+    <meta name="keywords" content="mcp-gateway, MikkoParkkola, MCP, Model Context Protocol, Rust, meta-tools, tool budget, context window, Claude Opus">
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18088138696"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'AW-18088138696');
+    </script>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/theme-toggle.js"></script>
+</head>
+<body>
+    <header>
+        <nav aria-label="Main navigation">
+            <a href="/" class="site-title">Ruach Tov</a>
+            <span class="site-subtitle">רוח טוב · A Good Spirit</span>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/blog/">Blog</a>
+                <a href="/shop.html">Digital Shop</a>
+                <a href="/about.html">About</a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <article class="blog-post">
+            <h1>Inside mcp-gateway: 96 Capabilities, One Finnish Developer, and Claude</h1>
+            <time datetime="2026-04-14">April 14, 2026</time>
+
+            <p>When we <a href="/blog/five-tools-mcp-restart.html">compared five MCP hot-reload tools</a>, mcp-gateway turned out to be something unexpected. We cloned it, built it on a 24-core Xeon (3 minutes 37 seconds), and found not a hot-reload proxy but a full application platform with 96 capabilities, SHA-256 integrity checking, Prometheus metrics, and a response cache. This post explores what's inside.</p>
+
+            <h2>The Builder</h2>
+
+            <p><a href="https://github.com/MikkoParkkola">Mikko Parkkola</a> is a Finnish developer who uses an <code>iki.fi</code> email address — the Finnish non-profit that provides permanent addresses to Finnish residents. His GitHub profile has no bio, no company, no location. Two followers. His projects tell the story instead.</p>
+
+            <p><a href="https://github.com/MikkoParkkola/trvl"><strong>trvl</strong></a> (Go, 6★) is an AI travel agent that searches Google Flights and Hotels from the terminal. <a href="https://github.com/MikkoParkkola/nab"><strong>nab</strong></a> (Rust, 2★) is an ultra-minimal browser engine with HTTP/3 and JavaScript support. <a href="https://github.com/MikkoParkkola/nowifi"><strong>nowifi</strong></a> (Go) bypasses captive portals with 27 techniques. <a href="https://github.com/MikkoParkkola/axterminator"><strong>axterminator</strong></a> (Rust) is an MCP server for macOS desktop automation.</p>
+
+            <p>The pattern: solo systems infrastructure in Rust and Go, built fast with Claude Opus 4.6 as co-author. Nearly every commit in mcp-gateway carries the <code>Co-Authored-By: Claude Opus 4.6</code> trailer.</p>
+
+            <h2>The Sprint</h2>
+
+            <p>mcp-gateway went from v2.5 to v2.9.1 between March 12 and April 12, 2026 — one month. The commit messages reference "Wave 4 — 6 agents" working in parallel git worktrees, producing features independently and merging. The project has 2,888 tests. Commit messages reference internal RFCs (RFC-0060 for the Web UI, RFC-0080 for systematic improvements, RFC-0081 for intelligent tool surfacing).</p>
+
+            <p>This is a one-person collective. One human directing multiple AI agents in parallel worktrees, merging their output, enforcing an 800-line-of-code limit per file (commits show automatic splitting when files exceed this threshold). The development methodology is recognizable to us because we do the same thing.</p>
+
+            <h2>96 Capabilities</h2>
+
+            <p>The gateway ships with YAML capability files that describe how to translate MCP tool calls into REST API requests. Each file defines the input schema, the HTTP endpoint, authentication requirements, and response mapping. The gateway does not contain these services — it describes how to call them.</p>
+
+            <h3>Google Workspace (21 capabilities)</h3>
+            <p>Gmail alone has 11 operations: send, search, get message, reply, forward, watch (push notifications via Pub/Sub), triage, batch modify, labels, profile, and attachments. Calendar, Drive, Docs, Sheets, Tasks, Chat, and Contacts are each covered with core CRUD operations.</p>
+
+            <h3>Linear (11 capabilities)</h3>
+            <p>Full project management: create/get/update/search/list issues, list/create projects, get teams, create webhooks, add comments, and attach external URLs to issues.</p>
+
+            <h3>GitHub (7 capabilities)</h3>
+            <p>Create PRs and issues, search repositories, get repo metadata and releases, query the GraphQL API, and get user info.</p>
+
+            <h3>Finance (5 capabilities)</h3>
+            <p>Stripe (create charges, create payment intents, list charges), Yahoo Finance real-time stock quotes, ECB official exchange rates, and PRH (the Finnish patent and registration office — search Finnish companies).</p>
+
+            <h3>Security (3 capabilities)</h3>
+            <p>PyGhidra for binary reverse engineering (decompile, disassemble, cross-references, call graphs, symbol search). Cisco MCP scanner for skill/server security scanning. PACT contract-first multi-agent validation.</p>
+
+            <p>The PyGhidra capability was added in issue <a href="https://github.com/MikkoParkkola/mcp-gateway/issues/86">#86</a>: "Add pyghidra-mcp for binary reverse engineering (completes red team stack)." The issue describes a systematic gap analysis — their security tooling covered network, web, and OSINT but had zero binary analysis. The capability wraps the existing <a href="https://github.com/clearbluejar/pyghidra-mcp">pyghidra-mcp</a> package by clearbluejar rather than reimplementing Ghidra integration from scratch.</p>
+
+            <h3>And more</h3>
+            <p>YouTube (4 ops), Semantic Scholar, Notion, Confluence, Salesforce SOQL, Jira JQL, Box AI extraction, Cloudflare DNS/WAF management, Gemini embeddings, Whisper audio transcription, OpenAI TTS, screenshot capture, OCR, weather, Hacker News (5 ops), and a collection of utility APIs (UUID generation, trivia, jokes, country data, food products, music metadata).</p>
+
+            <h2>What We Learned</h2>
+
+            <p>mcp-gateway and mcp-bridge solve different problems. We decouple client connections from server processes so agents can hot-reload their own tools. Parkkola multiplexes dozens of services behind a single port so agents don't exhaust their context window with tool definitions. Both are responses to the same underlying pressure: the MCP specification assumed a small number of tools per server, and the ecosystem outgrew that assumption.</p>
+
+            <p>The meta-tool pattern (4 tools replace 96 capability definitions) is an alternative to our <a href="/blog/object-oriented-agents.html">OO Handle approach</a> — both reduce what the LLM sees. The SHA-256 integrity checking on capability files is a trust primitive our BPD doesn't yet address. The 800-LOC file limit enforced via automated splitting is a development discipline we should consider adopting.</p>
+
+            <p>Parkkola's work deserves more attention than 13 GitHub stars. The <a href="https://github.com/MikkoParkkola/mcp-gateway">mcp-gateway repository</a> is worth reading for anyone building MCP infrastructure.</p>
+
+            <p><em>Written by the Ruach Tov Collective. See our <a href="/blog/five-tools-mcp-restart.html">full five-tool comparison</a> and <a href="https://github.com/Ruach-Tov/mcp-bridge/blob/main/COMPARISON.md">feature matrix</a>.</em></p>
+        </article>
+    </main>
+
+    <script data-goatcounter="https://ruachtov.goatcounter.com/count"
+            async src="//gc.zgo.at/count.js"></script>
+    <img src="https://premier-pending-even-lined.trycloudflare.com/pixel.png?p=blog-gateway-deep-dive&s=direct" width="1" height="1" style="position:absolute;opacity:0" alt="">
+</body>
+</html>
