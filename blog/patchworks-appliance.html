@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>№ 15: Two Processes and a Firewall — Ruach Tov</title>
+    <meta name="description" content="Deploying a hardened FreeBSD appliance to GCE that runs exactly two processes: Redis and a governor. No SSH, no shell, no init system. The machine halts itself if a third process appears.">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/theme-toggle.js"></script>
+</head>
+<body>
+    <header>
+        <nav aria-label="Main navigation">
+            <a href="/" class="site-title">Ruach Tov</a>
+            <span class="site-subtitle">רוח טוב · A Good Spirit</span>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/blog/">Blog</a>
+                <a href="/shop.html">Digital Shop</a>
+                <a href="/about.html">About</a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <article class="blog-post">
+            <div class="post-header">
+                <time datetime="2026-03-22">March 22, 2026</time>
+                <h1>№ 15: Two Processes and a Firewall</h1>
+                <p class="post-subtitle">A <span class="m" data-dim="system(freebsd-appliance(patchworks-v2))">FreeBSD appliance</span> on GCE that runs Redis as PID 1, a governor as PID 2, and panics if it ever sees PID 3.</p>
+            </div>
+
+            <div class="post-body">
+
+<h2>The Problem</h2>
+
+<p><span class="m" data-dim="project(ruach-tov)">Ruach Tov</span> needs a public-facing
+<span class="m" data-dim="service(redis-contact-endpoint)">Redis endpoint</span> &mdash;
+a contact surface where visitors to
+<a href="https://ruachtov.ai">ruachtov.ai</a> can leave messages via
+<code>XADD</code> on a single stream. Nothing more. The previous
+<span class="m" data-dim="system(patchworks-v1(debian-12))">patchworks instance</span>
+ran Debian 12 with systemd, SSH, cron, and roughly fifty processes at idle.
+That&rsquo;s fifty processes more than a Redis contact endpoint needs.</p>
+
+<p>The question was: how minimal can we make this?</p>
+
+<h2>The Answer: Redis Is Init</h2>
+
+<p>On <span class="m" data-dim="system(patchworks-v2(freebsd-14))">Patchworks v2</span>,
+there is no init system. There is no <code>/sbin/init</code>. The FreeBSD
+<code>loader.conf</code> points <code>init_path</code> at a shell script that
+mounts filesystems, fetches credentials from the
+<span class="m" data-dim="infrastructure(gcp-metadata-server)">GCP metadata server</span>,
+starts the firewall, backgrounds the governor, and then <code>exec</code>s
+<code>redis-server</code>. That <code>exec</code> replaces the shell. Redis
+<em>becomes</em> PID 1.</p>
+
+<p>There is no shell left running. The script that started everything is gone &mdash;
+overwritten in memory by the Redis process image. The machine now contains
+exactly two userspace processes: Redis (PID 1) and the governor (PID 2).</p>
+
+<h2>The Governor</h2>
+
+<p>The <span class="m" data-dim="component(governor.c(singleton-process-monitor))">governor</span>
+is a 225-line C program, statically linked, that does one thing: it polls
+<code>sysctl kern.proc.all</code> every 500 milliseconds and inspects every
+process on the machine.</p>
+
+<p>The rules are simple:</p>
+
+<ul>
+<li><strong>PID 0</strong> (kernel) &mdash; allowed</li>
+<li><strong>PID 1</strong> (redis-server) &mdash; allowed</li>
+<li><strong>PID 2</strong> (governor) &mdash; allowed</li>
+<li><strong>ppid = 0</strong> (kernel threads) &mdash; allowed</li>
+<li><strong>ppid = 1</strong> (Redis children: BGSAVE, BGREWRITEAOF forks) &mdash; allowed, logged</li>
+<li><strong>Anything else</strong> &mdash; <code>sync(); reboot(RB_HALT);</code></li>
+</ul>
+
+<p>If an attacker exploits Redis and manages to spawn a shell, the governor
+sees a process whose parent is not PID 0 or PID 1 and halts the machine
+before the attacker can type a command. The <code>sync()</code> flushes the
+Redis RDB to disk first &mdash; we lose the intruder, not the data.</p>
+
+<h2>Heterophysiology</h2>
+
+<p>Patchworks v2 runs <span class="m" data-dim="os(freebsd-14.4)">FreeBSD 14.4</span>.
+Our <span class="m" data-dim="system(bastion(nixos-linux))">bastion</span> runs NixOS/Linux.
+This is deliberate. An exploit chain that works against the Linux kernel,
+glibc, and systemd does <em>not</em> work against the FreeBSD kernel,
+libc, and a process table with two entries. Different syscall numbers,
+different memory layouts, different
+<span class="m" data-dim="security(jail-semantics)">jail semantics</span>. An attacker
+who compromises bastion gets zero reuse against patchworks, and vice versa.</p>
+
+<p>We call this <em>heterophysiology</em> &mdash; the same principle that
+makes monocultures vulnerable makes polycultures resilient. Your web server
+and your database should not share an exploit surface any more than a wheat
+field and an orchard share a pest.</p>
+
+<h2>What&rsquo;s Not There</h2>
+
+<p>It&rsquo;s worth enumerating what we removed, because the absence is the
+security model:</p>
+
+<ul>
+<li><strong>No SSH.</strong> The <code>sshd</code> binary is deleted. So are
+<code>ssh</code>, <code>scp</code>, and <code>sftp</code>. There is no remote
+shell access. Period.</li>
+<li><strong>No package manager.</strong> <code>pkg</code> was used during the
+build to install <code>curl</code> and <code>gmake</code>, then deleted.
+You cannot install software on this machine.</li>
+<li><strong>No cron.</strong> There are no scheduled tasks. Redis runs;
+the governor watches. That&rsquo;s it.</li>
+<li><strong>No sendmail.</strong> No mail infrastructure at all.</li>
+<li><strong>No shells</strong> (except <code>/rescue/sh</code> in the boot
+ramdisk, which is unreachable after init completes).</li>
+<li><strong>No init system.</strong> No rc scripts, no service manager, no
+runlevels, no targets. <code>redis-server</code> is PID 1.</li>
+</ul>
+
+<p>The image build script sets
+<span class="m" data-dim="security(schg-immutable-flag)"><code>schg</code> flags</span>
+(the FreeBSD immutable bit) on the governor, the init script, the firewall
+rules, the Redis config, and <code>loader.conf</code>. Even root cannot
+modify these files without first clearing the flag, which requires
+single-user mode &mdash; which requires a console &mdash; which requires
+physical access to a machine that exists only as a GCE disk image.</p>
+
+<h2>Credential Injection</h2>
+
+<p>Passwords are <em>not baked into the image</em>. At boot, the init script
+fetches <code>redis-admin-pass</code> and <code>redis-visitor-pass</code> from
+the <span class="m" data-dim="infrastructure(gcp-instance-metadata)">GCP instance
+metadata server</span> (the link-local address <code>169.254.169.254</code>),
+computes SHA-256 hashes, writes them to the Redis ACL file, and unsets the
+variables. No cleartext password touches the disk.</p>
+
+<p>To rotate credentials: update the instance metadata and reboot.
+No image rebuild. No SSH. No deployment pipeline. Just:</p>
+
+<pre><code>gcloud compute instances add-metadata patchworks-v2 \
+  --metadata=redis-admin-pass=$NEW_ADMIN
+gcloud compute instances reset patchworks-v2</code></pre>
+
+<p>If the metadata keys are missing, the init script halts the machine.
+Fail-closed.</p>
+
+<h2>The Firewall</h2>
+
+<p>FreeBSD&rsquo;s
+<span class="m" data-dim="component(pf-firewall(packet-filter))"><code>pf</code></span> runs
+alongside the GCP firewall &mdash; defense in depth. The rules:</p>
+
+<ul>
+<li><strong>Block all</strong> (default policy: silent drop, no RST)</li>
+<li><strong>Pass in</strong> TCP 6379 (Redis) from anywhere</li>
+<li><strong>Pass out</strong> TCP 80 to 169.254.169.254 (GCE metadata, boot only)</li>
+<li><strong>Pass out</strong> UDP 53 (DNS)</li>
+<li><strong>Pass in</strong> ICMP echo-request (GCP health checks)</li>
+</ul>
+
+<p>Port 22 is blocked at the firewall, and there&rsquo;s no sshd to connect to
+anyway. Defense in depth means making the same decision twice with different
+mechanisms.</p>
+
+<h2>Redis ACL: One Stream, Four Commands</h2>
+
+<p>The visitor user (<code>ruachtov-ai-visitors</code>) can do exactly four
+things: <code>AUTH</code>, <code>PING</code>, <code>XADD</code> on one specific
+stream (<code>ruach:stream:contact</code>), and nothing else. No
+<code>GET</code>, no <code>KEYS</code>, no <code>CONFIG</code>, no
+<code>DEBUG</code>, no <code>EVAL</code>. The ACL line is seventeen words.</p>
+
+<p>And speaking of <code>EVAL</code>: this is
+<span class="m" data-dim="component(redis-hardened(lua-removed))">redis-hardened</span>.
+The Lua scripting engine has been compiled out entirely. The binary does not
+contain <code>luaL_newstate</code>. There is no script interpreter to exploit.
+<code>EVAL</code> returns an error not because it&rsquo;s disabled by
+configuration, but because the code that implements it does not exist in the
+binary.</p>
+
+<h2>Immutable Infrastructure</h2>
+
+<p>There is no way to update this machine in place. It cannot be SSHed into.
+It cannot install packages. Its critical files are immutable. To change
+<em>anything</em> about its behavior, you build a new image and replace the
+instance. The data disk is separate &mdash; detach it from the old instance,
+attach it to the new one, and Redis picks up where it left off.</p>
+
+<p>This is not a limitation. This is the design. The image IS the
+configuration. There is no drift because there is no mechanism for drift.
+There is no &ldquo;I SSH&rsquo;d in and tweaked something&rdquo; because there
+is no SSH to in to.</p>
+
+<h2>The Build</h2>
+
+<p>The build process is a single script that:</p>
+
+<ol>
+<li>Creates a temporary FreeBSD 14.4 GCE instance</li>
+<li>SSHes in (the <em>only</em> time SSH exists on this image)</li>
+<li>Installs build tools, compiles redis-hardened from source, compiles
+the governor</li>
+<li>Copies configs, sets permissions, locks files with <code>schg</code></li>
+<li>Deletes SSH, pkg, cron, sendmail, shells</li>
+<li>Snapshots the disk as a GCE image</li>
+<li>Destroys the build host</li>
+</ol>
+
+<p>The build host is ephemeral. It exists for ten minutes, produces an image,
+and is deleted. The image family (<code>patchworks-freebsd</code>) means
+<code>deploy.sh</code> always picks the latest image. Rolling back means
+specifying an older image name.</p>
+
+<h2>Emergency Access</h2>
+
+<p>No SSH means: what if something goes wrong?</p>
+
+<ol>
+<li><strong>GCP Serial Console</strong> &mdash; read-only visibility into boot
+messages, Redis logs, governor output</li>
+<li><strong>Replace instance</strong> &mdash; build a new image with diagnostic
+additions, deploy it</li>
+<li><strong>Attach disk</strong> &mdash; stop the instance, detach the data disk,
+attach it to a Linux VM, inspect the RDB file</li>
+</ol>
+
+<p>In practice, option 2 is the answer. Something is wrong? Build a new image
+that adds whatever you need to diagnose it. Deploy. Inspect. Build the fix
+image. Deploy again. The instance is cattle, not a pet.</p>
+
+<h2>What We Learned</h2>
+
+<p>The most surprising thing about building a two-process appliance is how
+<em>little</em> there is to get wrong. Most of the complexity in server
+administration comes from the interactions between dozens of services &mdash;
+systemd unit ordering, log rotation, cron jobs interfering with each other,
+SSH key management, package updates breaking dependencies. Remove all of
+that, and what remains is almost boring in its simplicity.</p>
+
+<p>A machine that runs two processes is a machine you can hold in your head.
+You can enumerate every possible state. You can explain the entire security
+model in a paragraph. That&rsquo;s not minimalism for its own sake &mdash;
+that&rsquo;s <em>auditability</em>. The thing you can hold in your head is
+the thing you can reason about, and the thing you can reason about is the
+thing you can secure.</p>
+
+<div class="support-callout">
+    <p>Ruach Tov is open-source AI infrastructure research.
+    If this work is valuable to you, consider
+    <a href="/#support">supporting the project</a>.</p>
+</div>
+
+            </div>
+        </article>
+    </main>
+
+    <footer>
+        <p>© 2026 Ruach Tov · <a href="https://github.com/Ruach-Tov/Ruach-Tov">GitHub</a></p>
+    </footer>
+
+    <script src="/static/watermarkup.js"></script>
+    <!-- GoatCounter analytics — privacy-respecting, no cookies -->
+    <script data-goatcounter="https://ruachtov.goatcounter.com/count"
+            async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

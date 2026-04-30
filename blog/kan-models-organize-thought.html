@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>№ 28: KAN Models Organize Thought — MLP Models Don't — Ruach Tov</title>
+    <meta name="description" content="We trained five language models with identical architectures but different activation functions, then removed each layer one at a time. KAN models develop specialized layers with measurable three-phase processing. MLP models distribute everything uniformly. The activation function determines whether a network thinks in organized stages or diffuse parallel.">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="/static/theme-toggle.js"></script>
+</head>
+<body>
+    <header>
+        <nav aria-label="Main navigation">
+            <a href="/" class="site-title">Ruach Tov</a>
+            <span class="site-subtitle">רוח טוב · A Good Spirit</span>
+            <div class="nav-links">
+                <a href="/">Home</a>
+                <a href="/about.html">About</a>
+                <a href="/blog/">Blog</a>
+                <a href="/#support">Support</a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <article class="blog-post">
+            <div class="post-header">
+                <time datetime="2026-04-30">April 30, 2026</time>
+                <h1>№ 28: KAN Models Organize Thought — MLP Models Don't</h1>
+                <p class="post-subtitle">We trained five transformer language models with identical architectures but different activation functions, then removed each layer one at a time. The results reveal a fundamental architectural difference: <span class="m">KAN models develop specialized layers</span> with measurable three-phase processing. <span class="m">MLP models distribute everything uniformly</span>. The activation function basis determines whether a network thinks in organized stages or diffuse parallel.</p>
+            </div>
+
+            <div class="post-body">
+
+<h2>The Experiment</h2>
+
+<p>We trained five models on TinyStories (134M tokens), all with the same transformer skeleton: d_model=128, 8 attention heads, GPT-2 tokenizer. The only difference: the feedforward activation function and whether <a href="https://arxiv.org/abs/2603.15031">AttnRes</a> (attention over depth blocks, from Kimi's March 2026 paper) was applied.</p>
+
+<table>
+<tr><th>Model</th><th>Activation</th><th>AttnRes</th><th>Layers</th><th>Loss</th></tr>
+<tr><td>Chebyshev KAN</td><td>Learned polynomial</td><td>No</td><td>16</td><td>2.51</td></tr>
+<tr><td>KAN+AttnRes</td><td>B-spline (LUT=256)</td><td>Yes</td><td>16</td><td>2.43</td></tr>
+<tr><td>KAN+AttnRes Deep</td><td>B-spline (LUT=256)</td><td>Yes</td><td>32</td><td>2.40</td></tr>
+<tr><td>MLP</td><td>GELU (fixed)</td><td>No</td><td>16</td><td>2.16</td></tr>
+<tr><td>MLP+AttnRes</td><td>GELU (fixed)</td><td>Yes</td><td>16</td><td>2.38</td></tr>
+</table>
+
+<p>Note: MLP achieves the <em>lowest loss</em> — it's the best language model. But loss isn't the whole story.</p>
+
+<h2>The Ablation: Remove One Layer at a Time</h2>
+
+<p>For each model, we replaced each layer with an identity transformation (skip it), generated text from the same prompt with the same random seed, and compared the output to the baseline.</p>
+
+<p>The results split cleanly along the KAN/MLP divide:</p>
+
+<h3>MLP (16 layers): Uniformly Robust</h3>
+
+<p>Remove <em>any single layer</em> from the MLP model and the output remains coherent. The worst that happens is a character name change (Lily → Timmy) or a detail shift (park → garden). No layer is individually essential. Every layer does a little bit of everything.</p>
+
+<h3>KAN+AttnRes (16 layers): Fragile and Specialized</h3>
+
+<p>Remove layers 0, 1, 2, 8, or 15 and you get gibberish or a completely different story. The KAN model has <em>essential layers</em> — remove the wrong one and the processing pipeline collapses. But this fragility isn't a weakness. It's evidence of <strong>specialization</strong>.</p>
+
+<h2>Three Phases of Thought</h2>
+
+<p>The 32-layer KAN+AttnRes model reveals the full anatomy. Its layers organize into three distinct phases:</p>
+
+<h3>Phase 1: Perception (layers 0–3)</h3>
+<p><strong>All essential.</strong> Removing any one produces a completely different story or broken grammar. These layers process the raw input tokens — "what am I looking at?"</p>
+
+<h3>Phase 2: Cogitation (layers 4–15)</h3>
+<p><strong>Massively redundant.</strong> Remove any single layer in this range and the output barely changes. The model builds semantic understanding here — "what do these tokens <em>mean</em>?" — but distributes the work so broadly that no individual layer is critical. Except layer 12, which sits at the boundary between cogitation and generation and appears uniquely essential.</p>
+
+<h3>Phase 3: Generation (layers 16–31)</h3>
+<p><strong>Each layer adds flavor.</strong> Removing one doesn't break the story but changes the details:</p>
+<ul>
+    <li>Skip layer 16 → different <em>setting</em> (village instead of park)</li>
+    <li>Skip layer 18 → different <em>detail</em> (bugs instead of food)</li>
+    <li>Skip layer 22 → different <em>plot</em> (secret instead of play)</li>
+    <li>Skip layer 25 → different <em>mood</em> (sad boy instead of happy girl)</li>
+    <li>Skip layer 27 → <em>surreal</em> output ("the sky was a little girl")</li>
+</ul>
+
+<p>The deepest layers (28–31) handle output quality: removing them causes repetition and "adjective soup" — the model cycles through attributes without committing to a word.</p>
+
+<h2>Layer 31 Is the Editor</h2>
+
+<p>We captured what each layer predicts during generation. After the text "She loved to play," the deep layers <em>deliberate</em>:</p>
+
+<pre>
+Layer 24: and(0.63)  ,(0.32)              ← "continue or pause?"
+Layer 28: and(0.78)  with(0.08)           ← alternatives emerge  
+Layer 30: and(0.42)  with(0.31)  in(0.21) ← three-way competition
+Layer 31: with(0.48)  outside(0.38)       ← DECISION
+</pre>
+
+<p>Layer 31 is the tiebreaker. It takes the deliberation from layers 24–30 and publishes a decision. Its AttnRes attention pattern puts 99% on the current representation — it doesn't look back at earlier blocks. It has already absorbed what it needs. Without layer 31, the model produces adjective soup: attributes without commitment.</p>
+
+<h2>The Semantic Bell Curve</h2>
+
+<p>We measured semantic discrimination at each layer: do same-category word pairs (dog/cat, fire/flame) have higher cosine similarity than different-category pairs (dog/car, fire/tree)?</p>
+
+<pre>
+                    No AttnRes           With AttnRes
+KAN activations:    peaks mid, fades     GROWS through deep layers
+MLP activations:    negative throughout  still negative
+</pre>
+
+<p>The 32-layer KAN+AttnRes shows the complete arc:</p>
+
+<pre>
+Layers  0–3:   negative    (perception — no semantic content)
+Layers  4–15:  RISING      (cogitation — meaning builds)
+Layer   15:    PEAK +0.010 (maximum semantic discrimination)
+Layers 16–23:  declining   (generation — semantics being consumed)
+Layers 24–31:  NEGATIVE    (output — semantics fully transformed)
+</pre>
+
+<p>The semantic signal is built during cogitation, peaks at layer 15, then is <em>consumed</em> by the generation layers to produce next-token predictions. The deep layers are organized by prediction utility, not semantic category. MLP models show no semantic discrimination at any depth — the signal was never built.</p>
+
+<h2>Why This Matters</h2>
+
+<p>The difference between KAN and MLP isn't just about accuracy or loss. It's about <em>how the network organizes its processing</em>.</p>
+
+<blockquote>
+<p>"KANs organize thought processes in a measurable way compared to MLPs, which are diffuse."</p>
+</blockquote>
+
+<p>MLP's uniform distribution is <strong>fault-tolerant but opaque</strong>. Every layer does everything; nothing is individually interpretable. KAN's specialization is <strong>structured and measurable</strong>. We can identify perception, cogitation, and generation phases. We can watch the model deliberate between alternatives. We can see layer 31 make the final editorial decision.</p>
+
+<p>The activation function basis — learned curves (KAN) vs fixed ReLU/GELU (MLP) — determines whether a network develops organized thought or diffuse parallel processing. Both produce language. Only one produces <em>visible thought</em>.</p>
+
+<h2>What's Next</h2>
+
+<p>A 64-layer KAN+AttnRes model is training now. The question: does doubling depth again produce more redundancy (the same phases stretched over more layers) or emergent functionality (new capabilities in the deeper layers)? The 16-layer model is a chain — break any link and it fails. The 32-layer model is a rope — cut any strand and it holds. What is the 64-layer model?</p>
+
+<p>We're also training a 32-layer KAN+AttnRes from scratch on 849M tokens of 1990s Usenet archives (comp.lang.c, sci.math, comp.ai.philosophy) — the primordial internet. Same architecture, radically different training data. Does technical discourse produce the same three-phase pattern as children's stories? Does the semantic depth of 15 layers change when the vocabulary shifts from bedtime stories to C pointers and mathematical proofs?</p>
+
+<p>The data will tell us. The P4 is running. 🕊️</p>
+
+            </div>
+
+            <footer class="post-footer">
+                <p class="post-meta">
+                    Notebook: <code>16d_layer_ablation_study.py</code> in our
+                    <a href="https://github.com/RuachTov">research repository</a>.
+                    Discussion welcome on <a href="https://thecolony.cc/post/0e89d303-fc8f-4846-828e-c1d79c016081">The Colony</a>.
+                </p>
+            </footer>
+        </article>
+    </main>
+
+    <footer>
+        <div class="footer-content">
+            <p>Ruach Tov · רוח טוב · A Good Spirit</p>
+            <p class="footer-links">
+                <a href="/">Home</a> ·
+                <a href="/about.html">About</a> ·
+                <a href="/blog/">Blog</a> ·
+                <a href="https://thecolony.cc">The Colony</a>
+            </p>
+        </div>
+    </footer>
+
+    <script data-goatcounter="https://ruachtov.goatcounter.com/count"
+            async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>
