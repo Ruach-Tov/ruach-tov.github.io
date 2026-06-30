@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Architecture Lattice — Ruach Tov</title>
+<style>
+  body { margin: 0; background: #0d1117; color: #e6edf3; font-family: -apple-system, sans-serif; overflow: hidden; }
+  canvas { display: block; }
+  .legend {
+    position: fixed; bottom: 20px; left: 20px;
+    font-size: 13px; line-height: 1.8;
+    background: rgba(13,17,23,0.85); padding: 16px 20px;
+    border: 1px solid #30363d; border-radius: 6px;
+    max-width: 320px;
+  }
+  .legend h3 { margin: 0 0 8px; font-size: 14px; color: #58a6ff; }
+  .legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+  .title {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    font-size: 18px; font-weight: 600; color: #8b949e;
+    text-align: center;
+  }
+  .title em { color: #58a6ff; font-style: normal; }
+</style>
+</head>
+<body>
+<div class="title">
+  <em>Architecture × Deployment × Affinity</em><br>
+  <span style="font-size: 13px; color: #656d76;">The polyarchitecture dispatch lattice</span>
+</div>
+
+<div class="legend">
+  <h3>Deployment Slots</h3>
+  <div><span class="dot" style="background:#3b82f6;"></span> Blue — production</div>
+  <div><span class="dot" style="background:#22c55e;"></span> Green — standby / upgrade</div>
+  <div><span class="dot" style="background:#ef4444;"></span> Red — engineering / hazmat</div>
+  <div><span class="dot" style="background:#eab308;"></span> Yellow — pre-CI/CD, experimental</div>
+
+  <h3 style="margin-top:12px;">Languages (X axis)</h3>
+  <div style="font-family: monospace; font-size: 12px; color: #8b949e;">
+    Zig · Rust · Haskell · Go · Python
+  </div>
+
+  <h3 style="margin-top:12px;">Handle Affinity (Y axis)</h3>
+  <div style="font-size: 12px; color: #8b949e;">
+    ○ Free — routable<br>
+    ● Pinned — locked to origin
+  </div>
+
+  <h3 style="margin-top:12px;">Health</h3>
+  <div style="font-size: 12px; color: #8b949e;">
+    Bright = active &nbsp; Dim = available<br>
+    Pulsing = under hazard routing<br>
+    <span style="color:#ef4444;">Red = Green</span> → all tested, ready
+  </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// Languages along X
+const langs = ['Zig', 'Rust', 'Haskell', 'Go', 'Python'];
+// Deployment slots along Z (depth)
+const slots = [
+  { name: 'Blue',   color: [59, 130, 246], desc: 'production' },
+  { name: 'Green',  color: [34, 197, 94],  desc: 'standby' },
+  { name: 'Red',    color: [239, 68, 68],  desc: 'engineering' },
+  { name: 'Yellow', color: [234, 179, 8],  desc: 'experimental' },
+];
+// Handle affinity along Y
+const affinities = ['Free', 'Pinned'];
+
+// Simulated state — which nodes are active, hazard-routed, or converged
+const state = {};
+langs.forEach((lang, li) => {
+  slots.forEach((slot, si) => {
+    affinities.forEach((aff, ai) => {
+      const key = `${li}-${si}-${ai}`;
+      state[key] = {
+        active: (si === 0 && (li === 0 || li === 4)) || // blue-zig, blue-python active
+                (si === 1 && li === 0), // green-zig (upgrade target)
+        hazard: si === 2 && li === 2, // red-haskell under hazard routing
+        pinned: ai === 1 && si === 0 && li === 0, // blue-zig has a pinned handle
+        converged: si === 1 && si === 2, // green == red means tested
+      };
+    });
+  });
+});
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+let time = 0;
+
+function project(x, y, z) {
+  // Isometric-ish projection
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2 - 40;
+  const scale = Math.min(canvas.width, canvas.height) * 0.06;
+
+  const px = cx + (x - z * 0.6) * scale;
+  const py = cy + (y * 1.2 - (x + z) * 0.35) * scale;
+  return [px, py];
+}
+
+function draw() {
+  time += 0.016;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw grid lines (connections in the lattice)
+  ctx.strokeStyle = 'rgba(48, 54, 61, 0.4)';
+  ctx.lineWidth = 0.5;
+
+  // X-axis connections (between languages, same slot/affinity)
+  for (let si = 0; si < slots.length; si++) {
+    for (let ai = 0; ai < affinities.length; ai++) {
+      for (let li = 0; li < langs.length - 1; li++) {
+        const [x1, y1] = project(li * 2, ai * 3, si * 2.5);
+        const [x2, y2] = project((li + 1) * 2, ai * 3, si * 2.5);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Z-axis connections (between slots, same language/affinity)
+  for (let li = 0; li < langs.length; li++) {
+    for (let ai = 0; ai < affinities.length; ai++) {
+      for (let si = 0; si < slots.length - 1; si++) {
+        const [x1, y1] = project(li * 2, ai * 3, si * 2.5);
+        const [x2, y2] = project(li * 2, ai * 3, (si + 1) * 2.5);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Y-axis connections (between affinities, same language/slot)
+  for (let li = 0; li < langs.length; li++) {
+    for (let si = 0; si < slots.length; si++) {
+      const [x1, y1] = project(li * 2, 0, si * 2.5);
+      const [x2, y2] = project(li * 2, 3, si * 2.5);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+  }
+
+  // Draw nodes
+  langs.forEach((lang, li) => {
+    slots.forEach((slot, si) => {
+      affinities.forEach((aff, ai) => {
+        const key = `${li}-${si}-${ai}`;
+        const s = state[key];
+        const [px, py] = project(li * 2, ai * 3, si * 2.5);
+
+        const [r, g, b] = slot.color;
+        let alpha = s.active ? 1.0 : 0.25;
+        let radius = s.active ? 7 : 4;
+
+        // Hazard pulsing
+        if (s.hazard) {
+          alpha = 0.5 + 0.5 * Math.sin(time * 4);
+          radius = 6 + 2 * Math.sin(time * 4);
+        }
+
+        // Pinned handles get a ring
+        if (s.pinned) {
+          ctx.beginPath();
+          ctx.arc(px, py, radius + 5, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(${r},${g},${b},${alpha * 0.5})`;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+
+        // Glow for active nodes
+        if (s.active || s.hazard) {
+          ctx.beginPath();
+          const grad = ctx.createRadialGradient(px, py, 0, px, py, radius * 3);
+          grad.addColorStop(0, `rgba(${r},${g},${b},${alpha * 0.3})`);
+          grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+          ctx.fillStyle = grad;
+          ctx.arc(px, py, radius * 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Node
+        ctx.beginPath();
+        ctx.arc(px, py, radius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+        ctx.fill();
+
+        // Filled center for pinned
+        if (ai === 1) {
+          ctx.beginPath();
+          ctx.arc(px, py, radius * 0.4, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255,255,255,${alpha * 0.7})`;
+          ctx.fill();
+        }
+      });
+    });
+  });
+
+  // Axis labels
+  ctx.font = '12px monospace';
+  ctx.textAlign = 'center';
+
+  // Language labels (X axis)
+  langs.forEach((lang, li) => {
+    const [px, py] = project(li * 2, -1.5, -0.5);
+    ctx.fillStyle = '#8b949e';
+    ctx.fillText(lang, px, py);
+  });
+
+  // Slot labels (Z axis)
+  slots.forEach((slot, si) => {
+    const [px, py] = project(-1.5, -1.5, si * 2.5);
+    const [r, g, b] = slot.color;
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillText(slot.name, px, py);
+  });
+
+  // Affinity labels (Y axis)
+  affinities.forEach((aff, ai) => {
+    const [px, py] = project(-2, ai * 3, -0.5);
+    ctx.fillStyle = '#8b949e';
+    ctx.fillText(aff, px, py);
+  });
+
+  // Draw a "dispatch ray" — a line showing a tool call being routed
+  const rayPhase = (time * 0.5) % 1;
+  const rayStart = project(0, 0, 0); // blue-zig-free
+  const rayEnd = project(4, 0, 5);   // green-haskell-free (hazard route)
+  const rx = rayStart[0] + (rayEnd[0] - rayStart[0]) * rayPhase;
+  const ry = rayStart[1] + (rayEnd[1] - rayStart[1]) * rayPhase;
+
+  ctx.beginPath();
+  ctx.arc(rx, ry, 3, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(255,255,255,${0.8 - rayPhase * 0.6})`;
+  ctx.fill();
+
+  requestAnimationFrame(draw);
+}
+
+draw();
+</script>
+</body>
+</html>
