@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <defs>
+    <!-- Glow filter for electrical arcs -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Stronger glow for arc tips -->
+    <filter id="arc-glow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Subtle inner glow for the Hebrew letters -->
+    <filter id="text-glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background matching site bg color -->
+  <rect width="400" height="400" fill="#0d1117"/>
+  
+  <!-- Outer circle - using site warning/gold tone -->
+  <circle cx="200" cy="200" r="170" fill="none" stroke="#d29922" stroke-width="2.5" opacity="0.85"/>
+  
+  <!-- Inner circle -->
+  <circle cx="200" cy="200" r="130" fill="none" stroke="#d29922" stroke-width="2.5" opacity="0.85"/>
+  
+  <!-- "GOOD SPIRIT" text in the space between circles - top arc -->
+  <path id="topArc" d="M 42 200 A 158 158 0 0 1 358 200" fill="none"/>
+  <text fill="#d29922" font-family="'Georgia', 'Times New Roman', serif" font-size="14" letter-spacing="4" font-weight="normal" opacity="0.9">
+    <textPath href="#topArc" startOffset="50%" text-anchor="middle">GOOD SPIRIT</textPath>
+  </text>
+  
+  <!-- "רוח טוב" text in the space between circles - bottom arc -->
+  <path id="bottomArc" d="M 358 200 A 158 158 0 0 1 42 200" fill="none"/>
+  <text fill="#d29922" font-family="'Georgia', 'Times New Roman', serif" font-size="16" letter-spacing="3" font-weight="normal" opacity="0.9">
+    <textPath href="#bottomArc" startOffset="50%" text-anchor="middle">רוח טוב</textPath>
+  </text>
+  
+  <!-- Small decorative dots between text and circles -->
+  <circle cx="78" cy="115" r="2" fill="#d29922" opacity="0.6"/>
+  <circle cx="322" cy="115" r="2" fill="#d29922" opacity="0.6"/>
+  <circle cx="78" cy="285" r="2" fill="#d29922" opacity="0.6"/>
+  <circle cx="322" cy="285" r="2" fill="#d29922" opacity="0.6"/>
+  
+  <!-- Hebrew letters רט (Resh-Tet) in the center - matching site accent blue with glow -->
+  <text x="200" y="215" fill="#58a6ff" font-family="'David', 'Noto Serif Hebrew', 'Times New Roman', serif" 
+        font-size="80" text-anchor="middle" dominant-baseline="middle" font-weight="bold"
+        filter="url(#text-glow)" opacity="0.95">רט</text>
+  
+  <!-- === Electrical arcs crossing the boundaries === -->
+  <!-- Using site accent blue for primary arcs, lighter for secondary -->
+  
+  <!-- Top-right arc - jagged lightning path -->
+  <path d="M 225 150 Q 232 135 238 120 L 242 110 Q 248 95 252 82 L 258 65 Q 262 52 270 38" 
+        fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" 
+        filter="url(#arc-glow)" opacity="0.85"/>
+  <path d="M 228 148 Q 237 128 244 108 Q 253 88 264 62" 
+        fill="none" stroke="#79b8ff" stroke-width="1" stroke-linecap="round" 
+        filter="url(#glow)" opacity="0.5"/>
+  
+  <!-- Top-left arc -->
+  <path d="M 172 148 Q 165 130 155 110 L 148 95 Q 140 78 132 60 Q 126 48 120 35" 
+        fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" 
+        filter="url(#arc-glow)" opacity="0.85"/>
+  <path d="M 170 145 Q 158 118 145 90 Q 135 68 124 42" 
+        fill="none" stroke="#79b8ff" stroke-width="1" stroke-linecap="round" 
+        filter="url(#glow)" opacity="0.5"/>
+  
+  <!-- Right arc -->
+  <path d="M 252 198 Q 275 195 300 198 L 318 202 Q 338 208 355 215 Q 370 222 388 232" 
+        fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" 
+        filter="url(#arc-glow)" opacity="0.85"/>
+  <path d="M 255 200 Q 290 197 325 207 Q 355 218 382 235" 
+        fill="none" stroke="#79b8ff" stroke-width="1" stroke-linecap="round" 
+        filter="url(#glow)" opacity="0.5"/>
+  
+  <!-- Left arc -->
+  <path d="M 148 198 Q 125 195 100 198 L 82 202 Q 62 208 45 215 Q 30 222 12 232" 
+        fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" 
+        filter="url(#arc-glow)" opacity="0.85"/>
+  <path d="M 145 200 Q 110 197 75 207 Q 45 218 18 235" 
+        fill="none" stroke="#79b8ff" stroke-width="1" stroke-linecap="round" 
+        filter="url(#glow)" opacity="0.5"/>
+  
+  <!-- Bottom-right arc -->
+  <path d="M 232 252 Q 242 272 250 292 L 255 308 Q 262 328 270 348 Q 276 362 285 378" 
+        fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" 
+        filter="url(#arc-glow)" opacity="0.85"/>
+  <path d="M 235 255 Q 248 282 258 312 Q 268 340 282 372" 
+        fill="none" stroke="#79b8ff" stroke-width="1" stroke-linecap="round" 
+        filter="url(#glow)" opacity="0.5"/>
+  
+  <!-- Bottom-left arc -->
+  <path d="M 168 252 Q 158 272 150 292 L 145 308 Q 138 328 130 348 Q 124 362 115 378" 
+        fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" 
+        filter="url(#arc-glow)" opacity="0.85"/>
+  <path d="M 165 255 Q 152 282 142 312 Q 132 340 118 372" 
+        fill="none" stroke="#79b8ff" stroke-width="1" stroke-linecap="round" 
+        filter="url(#glow)" opacity="0.5"/>
+  
+  <!-- Small spark dots at arc tips - brighter -->
+  <circle cx="270" cy="38" r="3" fill="#79b8ff" filter="url(#arc-glow)" opacity="0.9"/>
+  <circle cx="120" cy="35" r="3" fill="#79b8ff" filter="url(#arc-glow)" opacity="0.9"/>
+  <circle cx="388" cy="232" r="3" fill="#79b8ff" filter="url(#arc-glow)" opacity="0.9"/>
+  <circle cx="12" cy="232" r="3" fill="#79b8ff" filter="url(#arc-glow)" opacity="0.9"/>
+  <circle cx="285" cy="378" r="3" fill="#79b8ff" filter="url(#arc-glow)" opacity="0.9"/>
+  <circle cx="115" cy="378" r="3" fill="#79b8ff" filter="url(#arc-glow)" opacity="0.9"/>
+  
+  <!-- Additional smaller sparks near where arcs cross boundaries -->
+  <circle cx="245" cy="105" r="1.5" fill="#58a6ff" filter="url(#glow)" opacity="0.7"/>
+  <circle cx="148" cy="100" r="1.5" fill="#58a6ff" filter="url(#glow)" opacity="0.7"/>
+  <circle cx="310" cy="200" r="1.5" fill="#58a6ff" filter="url(#glow)" opacity="0.7"/>
+  <circle cx="90" cy="200" r="1.5" fill="#58a6ff" filter="url(#glow)" opacity="0.7"/>
+  <circle cx="255" cy="305" r="1.5" fill="#58a6ff" filter="url(#glow)" opacity="0.7"/>
+  <circle cx="145" cy="305" r="1.5" fill="#58a6ff" filter="url(#glow)" opacity="0.7"/>
+</svg>

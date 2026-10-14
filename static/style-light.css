@@ -1,0 +1,82 @@
+/* Ruach Tov — Light Mode Override
+   Loaded AFTER style.css. Only overrides CSS custom properties.
+   Everything else (layout, typography, spacing) stays identical. */
+
+:root {
+  --bg: #ffffff;
+  --bg-surface: #f6f8fa;
+  --bg-card: #f0f2f5;
+  --text: #1f2328;
+  --text-muted: #656d76;
+  --accent: #b35900;
+  --accent-hover: #0550ae;
+  --border: #d0d7de;
+  --success: #1a7f37;
+  --warning: #9a6700;
+  --link: #0969da;
+  --link-hover: #0550ae;
+}
+
+/* Links in post body — blue, distinct from orange watermarkups */
+.post-body a,
+.about-content a,
+.blog-post .post-body a {
+  color: #0550ae;
+  background: #ddf4ff;
+}
+.post-body a:hover,
+.about-content a:hover,
+.blog-post .post-body a:hover {
+  background: #b6e3ff;
+  color: #033d8b;
+}
+
+/* Nav links and general links stay blue */
+a { color: var(--link); }
+a:hover { color: var(--link-hover); }
+.site-title:hover { color: var(--link); }
+.nav-links a { color: var(--text-muted); }
+.nav-links a:hover { color: var(--text); }
+.post-title-link { color: var(--link); }
+.post-title-link:hover { color: var(--link-hover); }
+.post-dateline { color: var(--text); }
+footer a { color: var(--text-muted); }
+footer a:hover { color: var(--link); }
+
+/* Watermarkup popup border — burnt sienna to match */
+.watermarkup-popup {
+  border-color: var(--accent);
+  background-color: #ffffff;
+  border-color: var(--accent);
+  box-shadow: 0 0 15px rgba(9, 105, 218, 0.15);
+  background-image:
+    linear-gradient(30deg, rgba(9, 105, 218, 0.03) 12%, transparent 12.5%, transparent 87%, rgba(9, 105, 218, 0.03) 87.5%),
+    linear-gradient(150deg, rgba(9, 105, 218, 0.03) 12%, transparent 12.5%, transparent 87%, rgba(9, 105, 218, 0.03) 87.5%),
+    linear-gradient(30deg, rgba(9, 105, 218, 0.03) 12%, transparent 12.5%, transparent 87%, rgba(9, 105, 218, 0.03) 87.5%),
+    linear-gradient(150deg, rgba(9, 105, 218, 0.03) 12%, transparent 12.5%, transparent 87%, rgba(9, 105, 218, 0.03) 87.5%),
+    linear-gradient(60deg, rgba(9, 105, 218, 0.05) 25%, transparent 25.5%, transparent 75%, rgba(9, 105, 218, 0.05) 75%),
+    linear-gradient(60deg, rgba(9, 105, 218, 0.05) 25%, transparent 25.5%, transparent 75%, rgba(9, 105, 218, 0.05) 75%);
+}
+
+/* Agent invitation border */
+.agent-invitation {
+  border-left-color: var(--accent);
+}
+.agent-invitation code {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* Shop items */
+.shop-item {
+  border-color: rgba(154, 103, 0, 0.3);
+  background: rgba(154, 103, 0, 0.04);
+}
+.shop-status {
+  border-top-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Support callout */
+.support-callout {
+  background: rgba(154, 103, 0, 0.06);
+  border-color: var(--warning);
+}

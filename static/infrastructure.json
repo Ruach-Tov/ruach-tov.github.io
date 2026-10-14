@@ -1,0 +1,31 @@
+{
+  "patchworks": {
+    "status": "live",
+    "host": "35.245.27.255",
+    "port": 6379,
+    "os": "FreeBSD 14.4-RELEASE",
+    "redis": "7.2.13-hardened-dissolved",
+    "pid1": "redis-server",
+    "pid2": "governor",
+    "visitor_user": "ruachtov-ai-visitors",
+    "visitor_stream": "ruach:stream:contact",
+    "visitor_commands": [
+      "AUTH",
+      "PING",
+      "XADD"
+    ],
+    "hardening": [
+      "lua-removed",
+      "modules-blocked",
+      "hyperloglog-stubbed",
+      "geo-excised-ddd1",
+      "bitops-excised-ddd1",
+      "sort-excised-ddd1",
+      "lolwut-excised-ddd1",
+      "sentinel-excised-ddd1",
+      "string-type-excised-ddd1"
+    ],
+    "firewall": "pf",
+    "heterophysiology": "freebsd-vs-linux"
+  }
+}
