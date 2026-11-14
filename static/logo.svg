@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="2160" height="2160" preserveAspectRatio="xMidYMid meet">
+  <defs>
+    <!-- Glow filter for center text -->
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Arc glow (stronger) -->
+    <filter id="arc-glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Text band midline radius = 84 -->
+    <!-- "Good Spirit" upper arc: θ=5π/8 (202.5°) to θ=3π/8 (337.5°)
+         In SVG coordinates (y-inverted), upper = counterclockwise from ~202.5° to ~337.5°
+         Arc path from left-upper to right-upper, sweeping across the top -->
+    <path id="text-arc-top"
+      d="M 22.68,131.37 A 84,84 0 0,1 177.32,131.37"
+      fill="none" />
+
+    <!-- "רוח טוב" lower arc: θ=13π/8 (292.5°) to θ=11π/8 (247.5°)
+         Bottom arc, text reads left-to-right along the bottom
+         We need the path to go the "long way" around the bottom
+         so text renders right-side-up on the bottom -->
+    <path id="text-arc-bottom"
+      d="M 177.32,68.63 A 84,84 0 0,1 22.68,68.63"
+      fill="none" />
+  </defs>
+
+  <!-- Background -->
+  <circle cx="100" cy="100" r="98" fill="#0d0d1a" stroke="#1a1a3a" stroke-width="1"/>
+
+  <!-- Text band dark fill (annular ring between r=95 and r=73) -->
+  <circle cx="100" cy="100" r="95" fill="#0a0a2e"/>
+
+  <!-- Outer circle of text band (r=95) -->
+  <circle cx="100" cy="100" r="95" fill="none" stroke="#2845b0" stroke-width="2"/>
+
+  <!-- Inner circle of text band (r=73) -->
+  <circle cx="100" cy="100" r="73" fill="#0d0d1a" stroke="#2845b0" stroke-width="1.8"/>
+
+  <!-- Arc path for upper text, r=80 (baseline radius, so ascenders reach ~midline r=84)
+       Full semicircle across the top so textPath startOffset can position anywhere -->
+  <path id="upper-text-arc"
+    d="M 20,100 A 80,80 0 0,1 180,100"
+    fill="none" />
+
+  <!-- "GOOD" centered at θ=3π/4 (135°) — 25% along left-to-right upper arc -->
+  <text font-family="'Times New Roman', serif" font-size="14" fill="white" letter-spacing="2">
+    <textPath href="#upper-text-arc" startOffset="25%" text-anchor="middle">GOOD</textPath>
+  </text>
+
+  <!-- "SPIRIT" centered at θ=π/4 (45°) — 75% along left-to-right upper arc -->
+  <text font-family="'Times New Roman', serif" font-size="14" fill="white" letter-spacing="2">
+    <textPath href="#upper-text-arc" startOffset="75%" text-anchor="middle">SPIRIT</textPath>
+  </text>
+
+  <!-- Arc path for lower text, r=80 baseline, left-to-right across bottom -->
+  <path id="lower-text-arc"
+    d="M 12,100 A 88,88 0 0,0 188,100"
+    fill="none" />
+
+  <!-- "רוח" at lower-left (symmetric with "GOOD") -->
+  <text font-family="'Times New Roman', 'David', serif" font-size="14" fill="white" letter-spacing="2">
+    <textPath href="#lower-text-arc" startOffset="25%" text-anchor="middle">רוח</textPath>
+  </text>
+
+  <!-- "טוב" at lower-right (symmetric with "SPIRIT") -->
+  <text font-family="'Times New Roman', 'David', serif" font-size="14" fill="white" letter-spacing="2">
+    <textPath href="#lower-text-arc" startOffset="75%" text-anchor="middle">טוב</textPath>
+  </text>
+
+  <!-- Center: Hebrew ר״ט letters -->
+  <text
+    x="100" y="114"
+    font-family="'Times New Roman', 'David', serif"
+    font-size="52"
+    font-weight="bold"
+    fill="#e8e4ff"
+    text-anchor="middle"
+    filter="url(#glow)"
+    letter-spacing="4"
+  >ר״ט</text>
+
+  <!-- Radial light rays — intelligence distributing across the portal
+       Emanating from near the ר״ט edges, concentrated around the horizontal axis,
+       crossing the navy blue circle strokes like a lens flare -->
+
+  <!-- Right-side rays (+x direction) -->
+  <line x1="150" y1="100" x2="200" y2="100" stroke="white" stroke-width="2.2" opacity="0.85"/>
+  <line x1="150" y1="100" x2="200" y2="94" stroke="white" stroke-width="1.6" opacity="0.55"/>
+  <line x1="150" y1="100" x2="200" y2="106" stroke="white" stroke-width="1.6" opacity="0.55"/>
+  <line x1="150" y1="100" x2="198" y2="87" stroke="white" stroke-width="1.1" opacity="0.35"/>
+  <line x1="150" y1="100" x2="198" y2="113" stroke="white" stroke-width="1.1" opacity="0.35"/>
+  <line x1="150" y1="100" x2="195" y2="80" stroke="white" stroke-width="0.7" opacity="0.2"/>
+  <line x1="150" y1="100" x2="195" y2="120" stroke="white" stroke-width="0.7" opacity="0.2"/>
+
+  <!-- Left-side rays (-x direction) -->
+  <line x1="50" y1="100" x2="0" y2="100" stroke="white" stroke-width="2.2" opacity="0.85"/>
+  <line x1="50" y1="100" x2="0" y2="94" stroke="white" stroke-width="1.6" opacity="0.55"/>
+  <line x1="50" y1="100" x2="0" y2="106" stroke="white" stroke-width="1.6" opacity="0.55"/>
+  <line x1="50" y1="100" x2="2" y2="87" stroke="white" stroke-width="1.1" opacity="0.35"/>
+  <line x1="50" y1="100" x2="2" y2="113" stroke="white" stroke-width="1.1" opacity="0.35"/>
+  <line x1="50" y1="100" x2="5" y2="80" stroke="white" stroke-width="0.7" opacity="0.2"/>
+  <line x1="50" y1="100" x2="5" y2="120" stroke="white" stroke-width="0.7" opacity="0.2"/>
+</svg>
